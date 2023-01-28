@@ -1,0 +1,244 @@
+# Imports and basic configuration
+import logging
+import random
+from functools import lru_cache
+from sage.crypto.sbox import SBox
+
+# Set up logging to include time and logging level, outputting from DEBUG up
+logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s', level=logging.DEBUG)
+
+# User-configurable parameters
+SBOX_SIZE = 4   # The number of bits of input and output of the s-box to search for
+POPULATION_SIZE = 1000  # The size of the population of each generation
+MAX_GENERATIONS = 1000000   # Stop after this many generations
+BEST_LIMIT = 10 * MAX_GENERATIONS // 100    # If the best doesn't change for this many generations, stop
+SATISFACTORY_SCORE = 0.8    # Any s-box with a score at or above this would be considered satisfactory
+SELECTION_SIZE = 20 * POPULATION_SIZE // 100    # When breeding the next generation, how much of the population should be possible parents
+KEEP_WORST = 5 * POPULATION_SIZE // 100 # When creating a new generation, keep this many of the worst solutions
+KEEP_BEST = 5 * POPULATION_SIZE // 100  # When creating a new generation, keep this many of the best solutions
+KEEP_RANDOM = 10 * POPULATION_SIZE // 100   # When creating a new generation, keep this many generated completely randomly
+MUTATION_RATE = 0.1 # Percentage of the time mutation should occur
+CROSSOVER_RATE = 0.8    # Percentage of the time crossover should occur
+REPORT_CALCULATION_LIMIT = 100000   # After this many candidates have been processed, report on the current best solution
+
+
+# The evaluation function to use for a candidate
+@lru_cache(maxsize = int(POPULATION_SIZE))
+def evaluate_candidate(candidate):
+     ##TODO: Ensure each property's value is between 0 and 1, regardless of S-box size
+    sbox = SBox(candidate)
+    F= 2** SBOX_SIZE # bound of Differential Uniformity 
+    
+    #NL = sbox.nonlinearity() / 120 #high is good 
+    LBA = sbox.differential_branch_number()  # high is good with no lightweight standard take in our consideration 
+    MLP = sbox.maximal_difference_probability()  # Equivalently,  Return the difference probability of the difference with the highest probability in the range between 0.0 and 1.0 indicating 0% or 100% respectively.
+    MLB = sbox.maximal_linear_bias_relative() # should be between +1\2 and -1\2 ..+1\2 is good for s-box but not good for start a linear attack or differential .. in paper they choose 1/4 to represenran optimal s-box with size 4  
+    BU = sbox.boomerang_uniformity() # should be as low as possible 2 is perfect 
+    Md=sbox.min_degree()/3 #at least 2 if less ignor it 
+    MDPA=sbox.maximal_difference_probability_absolute() #this is equal to the differential uniformity of this S-Box.
+    L=sbox.linearity()
+    AL=2** SBOX_SIZE-L
+
+    # TODO: Ensure each property's value is between 0 and 1, regardless of S-box size
+    LBA = 1 if LBA > 2 else 0
+    MLP = 1 if MLP < 0.5  and  MLP > 0 else 0
+    MLB = 1 if MLB > 0 and MLB <= 0.25 else 0 # because it calculate the rang from 0 to 1 is .we assume that the bound is always the quarter in all s-box sizes 
+    MDPA ,= 1 if MDPA >= 2 and MDPA < F else 0 # instead of AL may be be just 2. becuase if it =F  would be linear . I think we dont needed .
+    BU= 1 if BU >=2 and BU < F else 0
+
+    ##TODO: Ensure all values are better if higher - if not, then something like the following will fix it
+#    BU = 1 / BU if BU != 0 else 1
+#    Md= 1 / Md if Md!=0 else 1
+
+    ## TODO: Modify weightings to what we want - initially replicate 4x4 paper
+#    total = LBA * 0.9 + NL * 0.05 + MLP * 0.05+ BU * 0.05 +Md*0.9
+    total = LBA * 0.9 +  MLP * 0.05 + MLB * 0.9+ MDPA*0.05
+    return total
+
+
+# Genetic algorithm functions
+def get_canonical_sbox(s):
+    """
+    Follows Markku-Juhani O. Saarinen's "Cryptographic Analysis of All 4x4-Bit S-Boxes"
+    to convert the given s-box into the one that comes lexographically earliest while
+    staying in the same permutation-xor equivalence set.
+    """
+    s = SBox(s)
+    canonical = s
+    for ci in range(pow(2, s.input_size())):
+        for co in range(pow(2, s.input_size())):
+            for Pi in Permutations(s.input_size()):
+                for Po in Permutations(s.input_size()):
+                    modified = list(s)
+                    for i in range(len(modified)):
+                        i_ci = i ^ ci
+                        tmp_bin = ("0" * s.input_size() + bin(i_ci)[2:])[-s.input_size():]
+                        pi_i_ci = int(''.join(tmp_bin[i - 1] for i in Pi), 2)
+                        s_pi_i_ci = s(pi_i_ci)
+                        tmp_bin = ("0" * s.input_size() + bin(s_pi_i_ci)[2:])[-s.input_size():]
+                        po_s_pi_i_ci = int(''.join(tmp_bin[i - 1] for i in Po), 2)
+                        po_s_pi_i_ci_co = s_pi_i_ci ^ co
+                        modified[i] = po_s_pi_i_ci_co
+                    modified = SBox(modified)
+                    if tuple(modified) < tuple(canonical):
+                        canonical = modified
+    return tuple(canonical)
+
+
+def get_random_candidate(size):
+    """
+    Generates a new candidate at random
+    """
+    candidate = []
+    for i in range(int(2**size)):
+        candidate.append(i)
+    random.shuffle(candidate)
+    return tuple(candidate)
+
+
+def mutate(candidate):
+    """
+    Mutates a candidate by swapping around two of its entries
+    """
+    new_candidate = []
+    i = random.randrange(len(candidate))
+    j = random.randrange(len(candidate))
+    while (j == i):
+        j = random.randrange(len(candidate))
+    for k in range(len(candidate)):
+        if k == i:
+            new_candidate.append(candidate[j])
+        elif k == j:
+            new_candidate.append(candidate[i])
+        else:
+            new_candidate.append(candidate[k])
+    return tuple(new_candidate)
+
+
+def crossover(candidate1, candidate2):
+    """
+    Performs crossover by passing inputs through both s-boxes
+    """
+    new_candidate = []
+    sbox1 = SBox(candidate1)
+    sbox2 = SBox(candidate2)
+    for i in range(len(candidate1)):
+        new_candidate.append(sbox1(sbox2(i)))
+    return tuple(new_candidate)
+
+
+def evaluate(population):
+    """
+    Evaluates each candidate in the given population, returning the scores
+    """
+    result = []
+    for candidate in population:
+        score = evaluate_candidate(candidate)
+        result.append(score)
+    return result
+
+
+def sort_population(population):
+    """
+    Sorts new population in decreasing order (so the first element has the highest score).
+    
+    Change reverse to False if evaluate_candidate changes to have lower scores being better.
+    """
+    return sorted(population, key = evaluate_candidate, reverse = True)
+
+def evolve_new_population(population):
+    """
+    Evolves a new population (which is assumed to be sorted from best to worst) by:
+    
+    * Keeping the best KEEP_BEST candidates from the given population
+    * Keeping the worst KEEP_WORST candidates from the given population
+    * Adding KEEP_RANDOM random candidates
+    * Using the top SELECTION_SIZE candidates from the given population to:
+        * Select two candidates, with those with a better score more likely to be selected
+        * Crossing over the two selected candidates with probability CROSSOVER_RATE
+          (otherwise just using the first of the two)
+        * Mutating the result of the previous point with a probability of MUTATION_RATE
+      until the new population includes POPULATION_SIZE candidates
+    """
+    scores = evaluate(population)
+    new_population = []
+   
+    # Add some of the best candidates
+    for i in range(KEEP_BEST):
+        new_population.append(population[i])
+   
+    # Add some of the worst candidates
+    for i in range(1, KEEP_WORST + 1):
+        new_population.append(population[-i])
+   
+    # Add some random candidates
+    for i in range(KEEP_RANDOM):
+        new_population.append(get_random_candidate(SBOX_SIZE))
+   
+    # Evolve new candidates
+    while len(new_population) < POPULATION_SIZE:
+        selected_population = population[: SELECTION_SIZE]
+        selected_scores = scores[: SELECTION_SIZE]
+
+        # choose 2 candidates by their score
+        pair = random.choices(selected_population, selected_scores, k=2)
+
+        candidate = pair[0]
+        # Crossover
+        if random.random() < CROSSOVER_RATE:
+            candidate = crossover(pair[0], pair[1])
+        # Mutate
+        if random.random() < MUTATION_RATE:
+            candidate = mutate(candidate)
+        new_population.append(candidate)
+        
+    return sort_population(new_population)
+
+
+# Initialise population
+population = sort_population([get_random_candidate(SBOX_SIZE) for i in range(POPULATION_SIZE)])
+logging.info("Initial population generated.")
+
+# Evolve population
+best = population[0]
+best_count = 0
+calculation_count = 0
+logging.debug(f"0/{MAX_GENERATIONS}:\t{population[0]} {evaluate_candidate(population[0]):.2f}")
+
+for i in range(MAX_GENERATIONS):
+    # Check if the best is already good enough
+    if evaluate_candidate(best) >= SATISFACTORY_SCORE:
+        logging.debug(f"A satisfactory score at or above {SATISFACTORY_SCORE} has been found.")
+        break
+    
+    # Check if the best hasn't changed for the required number of generations to exit
+    if population[0] == best:
+        best_count += 1
+    else:
+        best = population[0]
+        best_count = 0
+    if best_count > BEST_LIMIT:
+        logging.debug(f"Best has remained the same for {BEST_LIMIT} generations.")
+        break
+    
+    # Generate the new population
+    population = evolve_new_population(population)
+    
+    # Report on progress every REPORT_CALCULATIONS or so evaluations
+    calculation_count += POPULATION_SIZE
+    if calculation_count >= REPORT_CALCULATION_LIMIT:
+        calculation_count = 0
+        logging.debug(f"{i}/{MAX_GENERATIONS}:\t{population[0]} {evaluate_candidate(population[0]):.2f}")
+
+
+# Calculate and display results
+logging.info("Evolution completeted. Calculating final results.")
+
+worst = population[-1]
+logging.info(f"Worst:\t{worst}\t{evaluate_candidate(worst)}")
+
+best = population[0]
+logging.info(f"Best:\t{best}\t{evaluate_candidate(best)}")
+
+canonical = get_canonical_sbox(best)
+logging.info(f"Canonical:\t{canonical}\t{evaluate_candidate(canonical)}")
