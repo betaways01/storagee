@@ -1,0 +1,113 @@
+# In[1]:
+
+import random
+import sagemath.crypto.sbox
+from functools import lru_cache
+
+# Define the population size and maximum number of generations
+pop_size = 0
+max_generations = 1000
+
+# Define the fitness function to evaluate each candidate S-box
+
+
+def fitness_func(sbox):
+    # Evaluate the non-linearity and differential uniformity of the sbox
+    non_linearity = sagemath.crypto.sbox.nonlinearity(sbox)
+    differential_uniformity = sagemath.crypto.sbox.differential_uniformity(
+        sbox)
+    # Combine the non-linearity and differential uniformity into a single score
+    score = non_linearity + differential_uniformity
+    return score
+
+# Cache the evaluation results to speed up the algorithm
+
+
+@lru_cache(maxsize=pop_size)
+def evaluate_candidate(candidate):
+    return fitness_func(candidate), candidate
+
+# Return a canonical representation of an S-box
+
+
+def get_canonical_sbox(s):
+    return tuple(s)
+
+# Generate a random candidate S-box
+
+
+def get_random_candidate(size):
+    return get_canonical_sbox(random.sample(range(256), 256))
+
+# Mutate a candidate S-box by swapping two elements
+
+
+def mutate(candidate):
+    s = list(candidate)
+    i, j = random.sample(range(256), 2)
+    s[i], s[j] = s[j], s[i]
+    return get_canonical_sbox(s)
+
+# Crossover two candidate S-boxes by merging elements
+
+
+def crossover(candidate1, candidate2):
+    s1, s2 = candidate1, candidate2
+    i, j = sorted(random.sample(range(256), 2))
+    return get_canonical_sbox(s1[:i] + s2[i:j] + s1[j:])
+
+# Evaluate the fitness of the entire population
+
+
+def evaluate(population):
+    return [evaluate_candidate(candidate) for candidate in population]
+
+# Sort the population based on fitness
+
+
+def sort_population(population):
+    population.sort(key=lambda x: x[0], reverse=True)
+
+# Evolve a new population from the current population
+
+
+def evolve_new_population(population):
+    new_population = []
+    for i in range(pop_size//2):
+        for j in range(2):
+            candidate = population[i][1]
+            if random.random() < 0.1:
+                candidate = mutate(candidate)
+            candidate = crossover(candidate, population[i + pop_size//2][1])
+            new_population.append(candidate)
+    return new_population
+
+
+# Generate an initial population of candidate S-boxes
+population = [get_random_candidate(256) for i in range(pop_size)]
+desired_fitness = 0.8
+# Run the genetic algorithm
+for generation in range(max_generations):
+    # Evaluate the fitness of each candidate S-box
+    population = evaluate(population)
+    sort_population(population)
+    # Print the best candidate S-box of the current generation
+    best_candidate = population[0][1]
+    best_fitness = population[0][0]
+    print(
+        f"Generation {generation}: Best candidate with fitness {best_fitness}")
+
+    # Stop the algorithm if the best candidate meets the desired criteria
+    if best_fitness >= desired_fitness:
+        break
+
+    # Evolve a new population from the current population
+    population = evolve_new_population(population)
+
+# Print the best candidate S-box found
+best_candidate = population[0][1]
+best_fitness = population[0][0]
+print(
+    f"Best candidate with fitness {best_fitness} found in generation {generation}")
+
+# %%
