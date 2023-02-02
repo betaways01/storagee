@@ -5,7 +5,7 @@ import sagemath.crypto.sbox
 from functools import lru_cache
 
 # Define the population size and maximum number of generations
-pop_size = 0
+pop_size = 1000
 max_generations = 1000
 
 # Define the fitness function to evaluate each candidate S-box
@@ -17,7 +17,7 @@ def fitness_func(sbox):
     differential_uniformity = sagemath.crypto.sbox.differential_uniformity(
         sbox)
     # Combine the non-linearity and differential uniformity into a single score
-    score = non_linearity + differential_uniformity
+    score = 0.5 * non_linearity + 0.5 * differential_uniformity
     return score
 
 # Cache the evaluation results to speed up the algorithm
