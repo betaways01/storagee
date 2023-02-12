@@ -1,0 +1,4 @@
+File named Index since it is seen as the homepage when creating a website.
+
+tags - define layouts on the web browser.
+tag terms - parent, child, grand parent, grand child

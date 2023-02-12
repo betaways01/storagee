@@ -1,0 +1,135 @@
+*{
+    padding: 0;
+    margin: 0;
+    font-family: 'system-ui';
+    box-sizing: border-box;
+}
+/*
+formating the top bar
+*/
+.topbar{
+    background-image: url('/img/best_home_design.png');
+
+    height: 100vh;
+    width: 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+}
+
+nav{
+    display: flex;
+    justify-content: space-evenly;
+    padding-top: 20px;
+    padding-left: 30%;
+    padding-right: 2%;
+}
+
+/*
+formating the name of the site . . . logo
+one side of it since we spanned the whole word into two
+*/
+.sitename{
+    color: rgb(116, 168, 227);
+    font-size: 30px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    padding: 10px 50px;
+}
+/*
+formating the span
+*/
+span{
+    color: blanchedalmond;
+}
+
+/*
+formatting the 5 buttons
+*/
+nav ul li{
+    list-style-type: disc;
+    display: inline-flex;
+    padding: 15px 55px;
+}
+
+
+nav ul li a{
+    color: rgb(255, 255, 255);
+    text-decoration: wavy;
+    font-weight: bold;
+    border: 5px solid transparent;
+    font-size: 15px;
+    transition: transform .5s;
+}
+nav ul li a:hover{
+    color:rgb(222, 192, 238);
+    transition: .7s;
+    transform: scale(1.5);
+    cursor: context-menu;
+}
+
+.buttn{
+    background-color:rgb(116, 168, 227);
+    color:rgb(255, 255, 255);
+    text-decoration: none;
+    border: 2px solid transparent;
+    font-weight: bold;
+    padding: 10px 25px;
+    border-radius: 30px;
+    transition: transform .5s;
+}
+.buttn:hover {
+    color: rgb(248, 247, 233);
+    transition: .5s;
+    transform: scale(1.2);
+}
+
+.content{
+    position: absolute;
+    top: 30%;
+    left: 8%;
+    transform: translateY(-47);
+}
+h1{
+    color: white;
+    margin: 20px 0px 20px;
+    font-size: 80px;
+}
+h3 {
+    color: white;
+    margin-bottom: 5px;
+    font-size: 20px;
+    position: relative;
+}
+h4 {
+    color: rgb(116, 168, 227);
+    margin-top: 0px;
+    font-size: 40px;
+}
+
+.intouch form{
+    width: 380px;
+    max-width: 100%;
+    position: relative;
+}
+.intouch form input:first-child{
+    display: inline-block;
+    width: 100%;
+    padding: 14px 130px 14px 15px;
+    border: 3px solid rgb(116, 168, 227);
+    outline: none;
+    border-radius: 15px;
+}
+.intouch form input:last-child {
+    display: inline-block;
+    position: absolute;
+    padding: 8px 5px ;
+    background-color:rgb(116, 168, 227);
+    border: 3px solid rgb(116, 168, 227);
+    outline: none;
+    border-radius: 50px;
+    color: white;
+    box-shadow: 0pc 0pc 5px rgb(71, 37, 37),o0px 0px 15px #924848;
+    top: 6px;
+    right: 6px;
+}
