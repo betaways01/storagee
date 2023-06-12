@@ -1,0 +1,412 @@
+> # Load required packages
+> library(readxl)
+> library(tidyverse)
+> library(lubridate)
+> library(ggplot2)
+> library(cowplot)
+> library(lmtest)
+> library(urca)
+> library(psych)
+> library(dplyr)
+> library(forecast)
+
+> # import data
+> df <- read_excel("Data Yearly.xlsx")
+> # Convert Dates column to date type                                              
+> df$Dates <- as.Date(df$Dates, format = "%Y-%m-%d")
+> # rename var names to shorter names for eacy visualization
+> df2 <- rename(df, 
++               Dates = Dates,
++               TradeBalance = `Trade Balance (Million Dollar)`,
++               CurrentAccount = `Balance of Payment Current Account (Million Dollar)`,
++               HotMoney = `Hot Money (Million Dollar)`,
++               GDP = `GDP Current Prices (Million Dollar)`,
++               USDTRY = `USDTRY Curncy`,
++               XU100 = `XU100 Index`
++ )
+> # check missing data
+> sum(is.na(df)) # no missing data, imputation not necessary
+[1] 0
+> #df <- na.omit(df)
+> # summary statistics
+> describe(df2)
+               vars  n     mean       sd   median  trimmed     mad       min
+Dates             1 35      NaN       NA       NA      NaN      NA       Inf
+TradeBalance      2 35 -4040.36  2920.69 -3682.97 -3876.67 3326.60  -9694.73
+CurrentAccount    3 35 -2693.74  2500.46 -2728.00 -2501.48 3043.78  -7696.00
+HotMoney          4 35 -4166.77 11379.80 -1106.00 -3272.68 3785.08 -41029.00
+GDP               5 35   502.80   312.06   504.79   499.39  466.96     90.85
+USDTRY            6 35     2.44     3.88     1.42     1.59    1.79      0.00
+XU100             7 35   576.80   978.77   268.64   391.17  397.63      0.04
+                    max    range  skew kurtosis      se
+Dates              -Inf     -Inf    NA       NA      NA
+TradeBalance    -203.98  9490.75 -0.47    -1.09  493.69
+CurrentAccount   250.00  7946.00 -0.50    -1.04  422.66
+HotMoney       15349.00 56378.00 -1.15     1.56 1923.54
+GDP              955.75   864.90  0.06    -1.78   52.75
+USDTRY            18.71    18.71  2.75     7.77    0.66
+XU100           5509.16  5509.12  3.68    15.58  165.44> 
+> 
+> # Visualization 
+> # Exploring all variables with histogram
+> df2 %>%
++   gather(key = "Variable", value = "Value", -Dates) %>%
++   ggplot(aes(x = Value)) +
++   geom_histogram(bins = 30) +
++   facet_wrap(~ Variable, scales = "free") +
++   theme_light()
+> # Plotting variables over time
+> df2 %>%
++   gather(key = "Variable", value = "Value", -Dates) %>%
++   ggplot(aes(x = Dates, y = Value)) +
++   geom_line() +
++   facet_wrap(~ Variable, scales = "free_y") +
++   theme_classic()
+> # Plotting correlation matrix
+> df_cor <- cor(df2[, -1])
+> corrplot::corrplot(df_cor, method = "number")
+> 
+> 
+> 
+> # MODELLING USING LINEAR MODEL
+> # Model Building - estimating effects of hot money on stock exchange index, exchange rates, and interest rates.
+> model_XU100 <- lm(XU100 ~ HotMoney, data = df2)
+> model_USDTRY <- lm(USDTRY ~ HotMoney, data = df2)
+> summary(model_XU100)
+
+Call:
+lm(formula = XU100 ~ HotMoney, data = df2)
+
+Residuals:
+   Min     1Q Median     3Q    Max 
+-688.2 -590.4 -278.0  239.4 4709.7 
+
+Coefficients:
+             Estimate Std. Error t value Pr(>|t|)   
+(Intercept) 629.54583  177.19376   3.553  0.00117 **
+HotMoney      0.01266    0.01481   0.855  0.39888   
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 982.7 on 33 degrees of freedom
+Multiple R-squared:  0.02166,	Adjusted R-squared:  -0.007989 
+F-statistic: 0.7305 on 1 and 33 DF,  p-value: 0.3989
+
+> summary(model_USDTRY)
+
+Call:
+lm(formula = USDTRY ~ HotMoney, data = df2)
+
+Residuals:
+   Min     1Q Median     3Q    Max 
+-2.999 -2.524 -1.169  1.230 14.854 
+
+Coefficients:
+             Estimate Std. Error t value Pr(>|t|)    
+(Intercept) 2.776e+00  6.896e-01   4.026 0.000312 ***
+HotMoney    8.044e-05  5.763e-05   1.396 0.172105    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 3.824 on 33 degrees of freedom
+Multiple R-squared:  0.05574,	Adjusted R-squared:  0.02713 
+F-statistic: 1.948 on 1 and 33 DF,  p-value: 0.1721
+
+> 
+> 
+> # Testing for Granger causality
+> # verify the usefulness of one variable to forecast another.
+> gc_XU100 <- grangertest(XU100 ~ HotMoney, order = 1, data = df2)
+> summary(gc_XU100)
+     Res.Df            Df           F             Pr(>F)       
+ Min.   :31.00   Min.   :-1   Min.   :3.064   Min.   :0.08992  
+ 1st Qu.:31.25   1st Qu.:-1   1st Qu.:3.064   1st Qu.:0.08992  
+ Median :31.50   Median :-1   Median :3.064   Median :0.08992  
+ Mean   :31.50   Mean   :-1   Mean   :3.064   Mean   :0.08992  
+ 3rd Qu.:31.75   3rd Qu.:-1   3rd Qu.:3.064   3rd Qu.:0.08992  
+ Max.   :32.00   Max.   :-1   Max.   :3.064   Max.   :0.08992  
+                 NA's   :1    NA's   :1       NA's   :1        
+> gc_USDTRY <- grangertest(USDTRY ~ HotMoney, order = 1, data = df2)
+> summary(gc_USDTRY)
+     Res.Df            Df           F             Pr(>F)      
+ Min.   :31.00   Min.   :-1   Min.   :1.615   Min.   :0.2132  
+ 1st Qu.:31.25   1st Qu.:-1   1st Qu.:1.615   1st Qu.:0.2132  
+ Median :31.50   Median :-1   Median :1.615   Median :0.2132  
+ Mean   :31.50   Mean   :-1   Mean   :1.615   Mean   :0.2132  
+ 3rd Qu.:31.75   3rd Qu.:-1   3rd Qu.:1.615   3rd Qu.:0.2132  
+ Max.   :32.00   Max.   :-1   Max.   :1.615   Max.   :0.2132  
+                 NA's   :1    NA's   :1       NA's   :1       
+> 
+> # Create a new data frame for VAR model
+> df_vars <- df2[, c("Dates", "HotMoney", "XU100", "USDTRY")]
+> # Ensure the dataset is a time-series object
+> df_vars_ts <- ts(df_vars[-1], start = year(df_vars$Dates[1]), frequency = 1)
+> # Done
+> # Perform the Augmented Dickey-Fuller test for stationarity
+> adf_HotMoney <- ur.df(df_vars$HotMoney, type = "drift")
+> adf_XU100 <- ur.df(df_vars$XU100, type = "drift")
+> adf_USDTRY <- ur.df(df_vars$USDTRY, type = "drift")
+> summary(adf_HotMoney)
+
+############################################### 
+# Augmented Dickey-Fuller Test Unit Root Test # 
+############################################### 
+
+Test regression drift 
+
+
+Call:
+lm(formula = z.diff ~ z.lag.1 + 1 + z.diff.lag)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-28488.1  -4660.7    746.9   3011.1  26655.7 
+
+Coefficients:
+              Estimate Std. Error t value Pr(>|t|)  
+(Intercept) -2.141e+03  2.093e+03  -1.023   0.3146  
+z.lag.1     -5.405e-01  1.968e-01  -2.747   0.0101 *
+z.diff.lag   3.231e-02  1.897e-01   0.170   0.8659  
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 10730 on 30 degrees of freedom
+Multiple R-squared:  0.2444,	Adjusted R-squared:  0.194 
+F-statistic: 4.851 on 2 and 30 DF,  p-value: 0.01495
+
+
+Value of test-statistic is: -2.747 3.8022 
+
+Critical values for test statistics: 
+      1pct  5pct 10pct
+tau2 -3.58 -2.93 -2.60
+phi1  7.06  4.86  3.94
+
+> summary(adf_XU100)
+
+############################################### 
+# Augmented Dickey-Fuller Test Unit Root Test # 
+############################################### 
+
+Test regression drift 
+
+
+Call:
+lm(formula = z.diff ~ z.lag.1 + 1 + z.diff.lag)
+
+Residuals:
+    Min      1Q  Median      3Q     Max 
+-914.59 -356.01   41.34  176.70 2417.66 
+
+Coefficients:
+             Estimate Std. Error t value Pr(>|t|)   
+(Intercept) -177.3871   132.7215  -1.337   0.1914   
+z.lag.1        0.7973     0.2438   3.270   0.0027 **
+z.diff.lag    -0.1833     0.7331  -0.250   0.8042   
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 548.8 on 30 degrees of freedom
+Multiple R-squared:  0.3221,	Adjusted R-squared:  0.2769 
+F-statistic: 7.127 on 2 and 30 DF,  p-value: 0.002934
+
+
+Value of test-statistic is: 3.2699 5.8529 
+
+Critical values for test statistics: 
+      1pct  5pct 10pct
+tau2 -3.58 -2.93 -2.60
+phi1  7.06  4.86  3.94
+
+> summary(adf_USDTRY)
+
+############################################### 
+# Augmented Dickey-Fuller Test Unit Root Test # 
+############################################### 
+
+Test regression drift 
+
+
+Call:
+lm(formula = z.diff ~ z.lag.1 + 1 + z.diff.lag)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-1.32099 -0.34261 -0.07776  0.29845  2.98411 
+
+Coefficients:
+            Estimate Std. Error t value Pr(>|t|)    
+(Intercept) -0.29606    0.17845  -1.659 0.107513    
+z.lag.1      0.41697    0.10596   3.935 0.000456 ***
+z.diff.lag   0.04913    0.27057   0.182 0.857142    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.7237 on 30 degrees of freedom
+Multiple R-squared:  0.738,	Adjusted R-squared:  0.7205 
+F-statistic: 42.25 on 2 and 30 DF,  p-value: 1.881e-09
+
+
+Value of test-statistic is: 3.935 8.4699 
+
+Critical values for test statistics: 
+      1pct  5pct 10pct
+tau2 -3.58 -2.93 -2.60
+phi1  7.06  4.86  3.94
+
+> 
+> # VAR MODELLING
+> var_model <- VAR(df_vars[-1], lag.max = 1, type = "const")
+> # Summary of the model
+> summary(var_model)
+
+VAR Estimation Results:
+========================= 
+Endogenous variables: HotMoney, XU100, USDTRY 
+Deterministic variables: const 
+Sample size: 34 
+Log Likelihood: -628.009 
+Roots of the characteristic polynomial:
+1.469 1.045 0.4713
+Call:
+VAR(y = df_vars[-1], type = "const", lag.max = 1)
+
+
+Estimation results for equation HotMoney: 
+========================================= 
+HotMoney = HotMoney.l1 + XU100.l1 + USDTRY.l1 + const 
+
+              Estimate Std. Error t value Pr(>|t|)  
+HotMoney.l1     0.4207     0.2066   2.037   0.0506 .
+XU100.l1       -4.3529    11.7318  -0.371   0.7132  
+USDTRY.l1    1465.4971  2048.7254   0.715   0.4799  
+const       -3280.9134  2496.1396  -1.314   0.1987  
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+Residual standard error: 10510 on 30 degrees of freedom
+Multiple R-Squared: 0.2461,	Adjusted R-squared: 0.1707 
+F-statistic: 3.265 on 3 and 30 DF,  p-value: 0.03492 
+
+
+Estimation results for equation XU100: 
+====================================== 
+XU100 = HotMoney.l1 + XU100.l1 + USDTRY.l1 + const 
+
+              Estimate Std. Error t value Pr(>|t|)    
+HotMoney.l1  -0.014648   0.004925  -2.974  0.00575 ** 
+XU100.l1     -0.842477   0.279726  -3.012  0.00523 ** 
+USDTRY.l1   492.596713  48.848674  10.084 3.76e-11 ***
+const       -77.945911  59.516571  -1.310  0.20026    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+Residual standard error: 250.5 on 30 degrees of freedom
+Multiple R-Squared: 0.9416,	Adjusted R-squared: 0.9357 
+F-statistic: 161.1 on 3 and 30 DF,  p-value: < 2.2e-16 
+
+
+Estimation results for equation USDTRY: 
+======================================= 
+USDTRY = HotMoney.l1 + XU100.l1 + USDTRY.l1 + const 
+
+              Estimate Std. Error t value Pr(>|t|)    
+HotMoney.l1  2.100e-05  1.375e-05   1.527    0.137    
+XU100.l1     6.708e-04  7.810e-04   0.859    0.397    
+USDTRY.l1    1.318e+00  1.364e-01   9.662 1.01e-10 ***
+const       -2.645e-01  1.662e-01  -1.592    0.122    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+Residual standard error: 0.6995 on 30 degrees of freedom
+Multiple R-Squared: 0.9709,	Adjusted R-squared: 0.968 
+F-statistic:   334 on 3 and 30 DF,  p-value: < 2.2e-16 
+
+
+
+Covariance matrix of residuals:
+          HotMoney      XU100    USDTRY
+HotMoney 110413071 -246408.25 1400.2668
+XU100      -246408   62770.93    6.0305
+USDTRY        1400       6.03    0.4893
+
+Correlation matrix of residuals:
+         HotMoney    XU100  USDTRY
+HotMoney   1.0000 -0.09360 0.19051
+XU100     -0.0936  1.00000 0.03441
+USDTRY     0.1905  0.03441 1.00000
+
+
+> # Plot the impulse response functions to see how a shock to one variable affects the other variables
+> irf_res <- irf(var_model, impulse = "HotMoney", response = c("XU100", "USDTRY"), boot = TRUE, n.ahead = 10)
+> plot(irf_res)
+> # Perform Granger causality tests
+> causality(var_model, cause = "HotMoney")
+$Granger
+
+	Granger causality H0: HotMoney do not Granger-cause XU100 USDTRY
+
+data:  VAR object var_model
+F-Test = 5.7523, df1 = 2, df2 = 90, p-value = 0.004457
+
+
+$Instant
+
+	H0: No instantaneous causality between: HotMoney and XU100 USDTRY
+
+data:  VAR object var_model
+Chi-squared = 1.5056, df = 2, p-value = 0.471
+
+
+> 
+> 
+> 
+> # ARIMA MODELLING
+> # Splitting data into train and test sets
+> n <- nrow(df_vars)
+> train_frac <- 0.8 # adjust this as needed
+> n_train <- floor(train_frac * n)
+> n_test <- n - n_train
+> 
+> # Train data
+> train_data <- df_vars[1:n_train, ]
+> 
+> # Test data
+> test_data <- df_vars[(n_train+1):n, ]
+> 
+> # Fit the models on the train data
+> model_XU100_train <- auto.arima(train_data$XU100, xreg = train_data$HotMoney)
+> model_USDTRY_train <- auto.arima(train_data$USDTRY, xreg = train_data$HotMoney)
+> 
+> # Generate forecasts for the test period
+> forecast_XU100 <- forecast(model_XU100_train, h = n_test, xreg = test_data$HotMoney)
+> forecast_USDTRY <- forecast(model_USDTRY_train, h = n_test, xreg = test_data$HotMoney)
+> #plotting the forecast
+> plot(forecast_XU100)
+> plot(forecast_USDTRY)
+> # Performance measures
+> accuracy_XU100 <- accuracy(forecast_XU100, test_data$XU100)
+> accuracy_USDTRY <- accuracy(forecast_USDTRY, test_data$USDTRY)
+> # Output the performance measures
+> print(paste("XU100 model performance:"))
+[1] "XU100 model performance:"
+> print(accuracy_XU100)
+                      ME       RMSE       MAE         MPE       MAPE       MASE
+Training set  -0.4354219   80.85897  61.75946 -1939.50712 1952.57603  0.7289609
+Test set     923.6630495 1773.59426 943.58178    29.46362   32.01276 11.1373100
+                   ACF1
+Training set -0.1578483
+Test set             NA
+> print(paste("USDTRY model performance:"))
+[1] "USDTRY model performance:"
+> print(accuracy_USDTRY)
+                    ME      RMSE       MAE      MPE     MAPE       MASE      ACF1
+Training set 0.0971599 0.2143007 0.1369614 21.05543 48.03990  0.8544066 0.1050289
+Test set     5.5585534 7.5799940 5.5585534 55.29575 55.29575 34.6759412        NA
+> 
+> # Note
+> # The performance measures include RMSE, MAE, MPE, MAPE and more.
+> # Lower values indicate better predictive accuracy.
